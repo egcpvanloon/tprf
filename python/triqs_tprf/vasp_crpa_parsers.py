@@ -79,12 +79,12 @@ def convert_from_ndarray_to_triqs(U_Q, Q, units, orbital_positions, kpts):
 
     bl = BravaisLattice(units, orbital_positions)
     bz = BrillouinZone(bl)
-    bzmesh = MeshBrZone(bz, np.diag(np.array(kpts, dtype=np.int32)))
+    bzmesh = MeshBrZone(bz, np.array(kpts, dtype=np.int32))
 
     u_q = Gf(mesh=bzmesh, target_shape=U_Q.shape[1:])
 
     H  = TBLattice(units=units, hopping={}, orbital_positions=orbital_positions)
-    kunits = H.bz.units()
+    kunits = H.bz.units
    
     # note: np.rint() absolutely imporant to have correct
     #       rounding behaviour
