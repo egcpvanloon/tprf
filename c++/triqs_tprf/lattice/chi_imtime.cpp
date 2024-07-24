@@ -35,7 +35,7 @@ namespace triqs_tprf {
 // ----------------------------------------------------
 // chi0 bubble in DLR imaginary time
 
-chi_Dtr_t chi0_tr_from_grt_PH(g_Dtr_cvt g_tr) {
+chi_Dtr_t chi0_tr_from_grt_PH(g_Dtr_cvt g_tr, bool symmetrize) {
 
   auto _ = all_t{};
 
@@ -45,7 +45,7 @@ chi_Dtr_t chi0_tr_from_grt_PH(g_Dtr_cvt g_tr) {
   int nb = g_tr.target().shape()[0];
   double beta = tmesh.beta();
 
-  dlr_imtime btmesh{beta, Boson, tmesh.w_max(), tmesh.eps()};
+  dlr_imtime btmesh{beta, Boson, tmesh.w_max(), tmesh.eps(), symmetrize};
   chi_Dtr_t chi0_tr{{btmesh, rmesh}, {nb, nb, nb, nb}};
 
   auto g_target = g_tr.target();

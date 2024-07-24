@@ -1339,7 +1339,7 @@ Returns
 out
      Generalized susceptibility :math:`\chi^{(0)}_{\bar{a}b\bar{c}d}(\tau, \mathbf{r})` in imaginary time and real-space.""")
 
-module.add_function ("triqs_tprf::chi_Dtr_t triqs_tprf::chi0_tr_from_grt_PH (triqs_tprf::g_Dtr_cvt g_tr)")
+module.add_function ("triqs_tprf::chi_Dtr_t triqs_tprf::chi0_tr_from_grt_PH (triqs_tprf::g_Dtr_cvt g_tr, bool symmetrize=false)")
                      
 module.add_function ("std::tuple<triqs_tprf::g_Tk_t, triqs_tprf::g_Tk_t> triqs_tprf::g0_Tk_les_gtr_from_e_k(triqs_tprf::e_k_cvt e_k, triqs::mesh::retime Tmesh, double beta)")
 
