@@ -227,7 +227,7 @@ chi_wr_t chi0_w0r_from_grt_PH(g_tr_cvt g_tr) {
   return chi0_wr;
 }  
 
-chi_t_t::target_t::value_t chi_trapz_tau(chi_t_cvt chi_t) {
+target_value_t<chi_t_t>::regular_type chi_trapz_tau(chi_t_cvt chi_t) {
 
   auto tmesh = chi_t.mesh();
   int ntau = tmesh.size();

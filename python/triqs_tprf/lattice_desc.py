@@ -1502,7 +1502,7 @@ out
 
 module.add_function ("triqs_tprf::chi_Dwr_t triqs_tprf::chi_wr_from_chi_wk (triqs_tprf::chi_Dwk_cvt chi_wk)")
                      
-module.add_function ("chi_t_t::target_t::value_t triqs_tprf::chi_trapz_tau (triqs_tprf::chi_t_cvt chi_t)", doc = r"""""")
+module.add_function ("target_value_t<chi_t_t>::regular_type triqs_tprf::chi_trapz_tau (triqs_tprf::chi_t_cvt chi_t)", doc = r"""""")
 
 module.add_function ("triqs_tprf::chi_wnr_t triqs_tprf::chi0r_from_gr_PH (int nw, int nn, triqs_tprf::g_wr_cvt g_nr)", doc = r"""Generalized susceptibility bubble in the particle-hole channel :math:`\chi^{(0)}_{\bar{a}b\bar{c}d}(\omega, \nu, \mathbf{r})`.
 
