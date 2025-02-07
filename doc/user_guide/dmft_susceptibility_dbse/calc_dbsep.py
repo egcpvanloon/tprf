@@ -68,6 +68,7 @@ from w2dyn_cthyb.converters_worm import g2_from_w2dyn_G2_worm_components
 # Instead, the current implementation is expected to have the same power of nwf but better prefactor.
 
 from triqs.gf import Gf, MeshProduct, Idx, MeshImFreq
+from triqs.gf import inverse
 from triqs_tprf.lattice import fourier_wk_to_wr, chi0r_from_gr_PH, chi0q_from_chi0r, chiq_sum_nu_from_chi0q_and_gamma_and_L_wn_PH
 
 from triqs_tprf.linalg import product_PH, inverse_PH, identity_PH
@@ -78,88 +79,56 @@ from triqs_tprf.lattice_utils import add_fake_bosonic_mesh
 
 import numpy as np
 
-def impurity_polarization(chi_w,U_mat):
-    # Construct desired impurity single-frequency objects
+from linalg_utils import ChannelOrder
+from linalg_utils import matrix_from_tensor, tensor_from_matrix
+from linalg_utils import gf_matrix_from_tensor, gf_tensor_from_matrix
 
-    # Rather painful, TPRF functions we want to use take wnn Gfs as input, so we need fake fermion grids
-    # This should be improved in the future
-    fake_fermion_mesh = MeshImFreq( beta=chi_w.mesh.beta, statistic='Fermion', n_iw=1)
-    chi_wnn = Gf( mesh=MeshProduct( chi_w.mesh, fake_fermion_mesh, fake_fermion_mesh), target_shape=chi_w.target_shape )
-    U_wnn = chi_wnn.copy()
-    U_wnn.data[:] *= 0
-    for w in U_wnn.mesh[0]:
-        for n1 in U_wnn.mesh[1]:
-            U_wnn[w,n1,n1] = U_mat
-            chi_wnn[w,n1,n1] = chi_w[w]
+def impurity_polarization(chi_w,U_tensor):
+
+    chi_w_mat = gf_matrix_from_tensor(chi_w)
+    U_mat = matrix_from_tensor(U_tensor)
+    
+    pi_w_mat = chi_w_mat.copy()
+    W_w_mat = chi_w_mat.copy()
 
     # Definition above Eq 8 in [1]:
     # chi = pi / (1 - U pi), so chi - chi U pi = pi. Due to geometric series, also chi - pi U chi = pi, sochi = pi (1+ U chi) and finally:
     # pi = chi / (1+U chi)
-    # W  = U / (1 + U pi)
-    pi_wnn = product_PH( chi_wnn, inverse_PH( identity_PH(chi_wnn)+product_PH(U_wnn, chi_wnn)  )  )
-    W_wnn = product_PH( U_wnn, inverse_PH( identity_PH(pi_wnn)+product_PH(U_wnn, pi_wnn) ) )
-    Upi_wnn = product_PH( U_wnn, pi_wnn)
+    # W  = U / (1 - pi U )
 
-    # Now, get back to single-frequency objects by removing the fake fermion grids
-    pi_w = chi_w.copy()
-    W_w = chi_w.copy()
-    Upi_w = chi_w.copy()
-    for w in pi_w.mesh:
-        pi_w[w]  =  pi_wnn[w,Idx(0),Idx(0)]
-        W_w[w]   =   W_wnn[w,Idx(0),Idx(0)]
-        Upi_w[w] = Upi_wnn[w,Idx(0),Idx(0)]
+    pi_w_mat << chi_w_mat * inverse(1. + U_mat * chi_w_mat )
+    W_w_mat << U_mat * inverse(1. - pi_w_mat*U_mat)
 
-    return pi_w, W_w, Upi_w
+    pi_w = gf_tensor_from_matrix(pi_w_mat)
+    W_w = gf_tensor_from_matrix(W_w_mat)
 
-def pi_kw_to_chi_kw(pi_kw, U_mat):
-    # Transform the lattice polarization to the lattice susceptibility
+    return pi_w, W_w
 
-    chi_kw = pi_kw.copy()
-    chi_kw.data[:] *= 0
+def pi_kw_to_chi_kw(pi_kw, U_tensor):
+    
+    U_mat = matrix_from_tensor(U_tensor)
+    pi_kw_mat = gf_matrix_from_tensor(pi_kw)
+    chi_kw_mat= pi_kw_mat.copy()
 
-    fake_fermion_mesh = MeshImFreq( beta=pi_kw.mesh[1].beta, statistic='Fermion', n_iw=1)
-
+    # chi = pi / (1 - U pi)
     for k in pi_kw.mesh[0]:
-        pi_wnn = Gf( mesh=MeshProduct( pi_kw.mesh[1], fake_fermion_mesh, fake_fermion_mesh), target_shape=pi_kw.target_shape )
-        U_wnn = pi_wnn.copy()
-        U_wnn.data[:] *= 0
-        for w in U_wnn.mesh[0]:
-            for n1 in U_wnn.mesh[1]:
-                U_wnn[w,n1,n1] = U_mat
-                pi_wnn[w,n1,n1] = pi_kw[k,w]
+        chi_kw_mat[k,:] << pi_kw_mat[k,:] * inverse(1. - U_mat*pi_kw_mat[k,:])
 
-        chi_wnn = product_PH( pi_wnn, inverse_PH( identity_PH(pi_wnn)-product_PH(U_wnn, pi_wnn) ) )
+    return gf_tensor_from_matrix(chi_kw_mat)
 
-        for w in pi_kw.mesh[1]:
-            chi_kw[k,w] = chi_wnn[w,Idx(0),Idx(0)]
-    return chi_kw
-
-
-def irreducible_L(L_wn, Upi_w):
-    # Make irreducible vertex Lirr from reducible version L
-    bmesh = L_wn.mesh[0]
-    fmesh = L_wn.mesh[1]
-
-    # Rather painful, TPRF functions take wnn Gfs as input, so we need to add an additional mesh
-    L_wnn = Gf( mesh=MeshProduct( bmesh, fmesh, fmesh), target_shape=L_wn.target_shape )
-    for w,n1 in L_wn.mesh:
-        L_wnn[w,n1,n1] = L_wn[w,n1]
-    Upi_wnn = L_wnn.copy()
-    Upi_wnn.data[:] *= 0
-    for w,n1 in L_wn.mesh:
-        Upi_wnn[w,n1,n1] = Upi_w[w]
-
+def irreducible_L(L_wn, U_tensor, pi_w):
+    U_mat = matrix_from_tensor(U_tensor)
+    pi_w_mat = gf_matrix_from_tensor(pi_w)
+    L_wn_mat = gf_matrix_from_tensor(L_wn)
+    Lirr_wn_mat = L_wn_mat.copy()
 
     # L = Lirr / (1-U pi), according to Eq 8 of [1]. Solving for Lirr gives
     # L - L U pi = Lirr
-    Lirr_wnn = L_wnn - product_PH( L_wnn, Upi_wnn  )
+    # Note: TPRF uses L with boson on the right, so it is L U pi and not pi U L
+    for n in L_wn.mesh[1]:
+        Lirr_wn_mat[:,n] = L_wn_mat[:,n] - L_wn_mat[:,n] * U_mat * pi_w_mat
 
-    # Get rid of fake mesh
-    Lirr_wn = L_wn.copy()
-    for w,n in Lirr_wn.mesh:
-        Lirr_wn[w,n] = Lirr_wnn[w,n,n]
-
-    return Lirr_wn
+    return gf_tensor_from_matrix(Lirr_wn_mat)
 
 def irreducible_F(F_wnn,W_w, L_wn):
     # Make irreducible vertex Firr from reducible version F
@@ -215,7 +184,7 @@ p2 = p2_from_w2dyn_P2_worm_components(p_chi.GF_worm_components, p.num_orbitals)
 p.g_tau = make_gf_from_fourier(p.g_w)
 p.chi_imp_w = p2_remove_disconnected(p2, p.g_tau)
 # Impurity polarization/screened interaction
-p.pi_imp_w, p.W_w, p.Upi_w = impurity_polarization( p.chi_imp_w, p.U_mat)
+p.pi_imp_w, p.W_w = impurity_polarization( p.chi_imp_w, p.U_mat)
 
 # "Triangle" impurity two-particle Green's function (two frequencies)
 p_tri = load_h5(filename_tri)
@@ -223,7 +192,7 @@ p3 = p3_from_w2dyn_P3_worm_components(p_tri.GF_worm_components, p.num_orbitals)
 p3 = p3_w2dyn_to_triqs_freq_shift_alt(p3)
 p.L_wn = L_from_g3(p3, p.g_w) # remove disconnected and amputate
 # U-irreducible part
-p.Lirr_wn = irreducible_L(p.L_wn, p.Upi_w)
+p.Lirr_wn = irreducible_L(p.L_wn, p.U_mat, p.pi_imp_w)
 
 # "Square" impurity two-particle Green's function (three frequencies)
 p_g2 = load_h5(filename_g2)
@@ -231,11 +200,14 @@ p.g2_wnn = g2_from_w2dyn_G2_worm_components(
     p_g2.G2_worm_components, p.num_orbitals)
 
 # Lattice dispersion and Green's function
-g_wk = lattice_dyson_g_wk(mu=p.mu, e_k=p.e_k, sigma_w=p.sigma_w)
+B_field = np.diag([+p.B, -p.B,]) if hasattr(p, 'B') else zero
+g_wk = lattice_dyson_g_wk(mu=p.mu, e_k=p.e_k, sigma_w=p.sigma_w- B_field)
 
 # DBSE, DBSEP calculations for varying frequency window
 
-for nwf in [20, 18, 16, 14, 12, 10, 8, 6, 4]:
+#for nwf in [20, 18, 16, 14, 12, 10, 8, 6, 4]:
+for nwf in [30,28,26,24,22, 20, 18, 16, 14, 12, 10, 8, 6, 4]:
+#for nwf in [2,]:
     print('='*72)
     print(f'nwf = {nwf}', flush=True)
     p.nwf = nwf
